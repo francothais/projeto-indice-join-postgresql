@@ -1,67 +1,81 @@
 DROP TABLE IF EXISTS contratos CASCADE;
-DROP TABLE IF EXISTS fornecedores CASCADE;
+DROP TABLE IF EXISTS clientes CASCADE;
 
-CREATE TABLE fornecedores (
-    id SERIAL PRIMARY KEY,
-    nome_fornecedor VARCHAR(100),
-    cidade VARCHAR(100)
+CREATE TABLE clientes (
+    id_cliente SERIAL PRIMARY KEY,
+    nome_cliente VARCHAR(100) NOT NULL,
+    cidade VARCHAR(80),
+    estado CHAR(2)
 );
 
 CREATE TABLE contratos (
-    id SERIAL PRIMARY KEY,
-    numero_contrato VARCHAR(20),
+    id_contrato SERIAL PRIMARY KEY,
+    id_cliente INT NOT NULL,
+    numero_contrato VARCHAR(20) NOT NULL,
+    valor DECIMAL(10,2),
     data_contrato DATE,
-    orgao VARCHAR(100),
-    fornecedor VARCHAR(100)  -- manter mesmo formato de texto para o JOIN
+    status VARCHAR(20),
+    FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente)
 );
 
-INSERT INTO fornecedores (nome_fornecedor, cidade)
+-- Inserindo 100 clientes
+INSERT INTO clientes (nome_cliente, cidade, estado)
 SELECT 
-    'Fornecedor_' || i,
-    CASE 
-        WHEN i % 2 = 0 THEN 'São Paulo'
-        WHEN i % 3 = 0 THEN 'Rio de Janeiro'
-        ELSE 'Brasília'
-    END
-FROM generate_series(1, 1000) AS s(i);
+    'Cliente ' || i,
+    'Cidade ' || (i % 10),
+    'SP'
+FROM generate_series(1, 100) AS s(i);
 
-INSERT INTO contratos (numero_contrato, data_contrato, orgao, fornecedor)
+INSERT INTO contratos (id_cliente, numero_contrato, valor, data_contrato, status)
 SELECT 
-    'CT-' || lpad(i::text,5,'0'),
-    CURRENT_DATE - (i % 365), 
+    (random() * 99 + 1)::INT, -- cliente aleatório entre 1 e 100
+    'CTR-' || LPAD(i::TEXT, 5, '0'), -- número de contrato formatado
+    (random() * 9000 + 1000)::NUMERIC(10,2), -- valor entre 1000 e 10000
+    CURRENT_DATE - (i % 365), -- data nos últimos 12 meses
     CASE 
-        WHEN i % 2 = 0 THEN 'Prefeitura Municipal'
-        WHEN i % 3 = 0 THEN 'Ministério da Saúde'
-        ELSE 'Governo Federal'
-    END,
-    'Fornecedor_' || ((i % 1000) + 1)
+        WHEN random() < 0.7 THEN 'Ativo'
+        WHEN random() < 0.9 THEN 'Encerrado'
+        ELSE 'Pendente'
+    END
 FROM generate_series(1, 5000) AS s(i);
 
-SELECT COUNT(*) AS total_contratos FROM contratos;
-SELECT COUNT(*) AS total_fornecedores FROM fornecedores;
+-- Buscar contratos de um cliente específico
+SELECT * FROM contratos WHERE id_cliente = 42;
 
--- IMPORTANTE: anote o output do EXPLAIN ANALYZE (total runtime)
-EXPLAIN ANALYZE
-SELECT * FROM contratos WHERE numero_contrato = 'CT-02500';
+-- Buscar contratos com status 'Ativo'
+SELECT * FROM contratos WHERE status = 'Ativo';
 
-CREATE INDEX idx_contratos_numero ON contratos(numero_contrato);
+-- Buscar contratos com valor acima de 8000
+SELECT * FROM contratos WHERE valor > 8000;
 
-EXPLAIN ANALYZE
-SELECT * FROM contratos WHERE numero_contrato = 'CT-02500';
+-- Índice por cliente (melhora buscas por id_cliente)
+CREATE INDEX idx_contratos_cliente ON contratos(id_cliente);
 
-CREATE INDEX idx_fornecedores_nome ON fornecedores(nome_fornecedor);
+-- Índice por status (melhora buscas por contratos ativos/inativos)
+CREATE INDEX idx_contratos_status ON contratos(status);
 
-EXPLAIN ANALYZE
+-- Índice composto (cliente + status)
+CREATE INDEX idx_contratos_cliente_status ON contratos(id_cliente, status);
+
+-- Contratos de um cliente específico (usa idx_contratos_cliente)
+SELECT * FROM contratos WHERE id_cliente = 42;
+
+-- Contratos ativos (usa idx_contratos_status)
+SELECT * FROM contratos WHERE status = 'Ativo';
+
+-- Contratos ativos de um cliente (usa idx_contratos_cliente_status)
+SELECT * FROM contratos WHERE id_cliente = 42 AND status = 'Ativo';
+
+-- JOIN simples entre contratos e clientes
 SELECT 
+    c.id_contrato,
     c.numero_contrato,
-    c.data_contrato,
-    c.orgao,
-    f.nome_fornecedor,
-    f.cidade
+    c.valor,
+    c.status,
+    cl.nome_cliente,
+    cl.cidade
 FROM contratos c
-JOIN fornecedores f
-  ON c.fornecedor = f.nome_fornecedor
-WHERE f.cidade = 'São Paulo';
-
-SELECT * FROM contratos ORDER BY id LIMIT 10;
-SELECT * FROM fornecedores ORDER BY id LIMIT 10;
+JOIN clientes cl ON c.id_cliente = cl.id_cliente
+WHERE c.status = 'Ativo'
+ORDER BY c.valor DESC
+LIMIT 10;
