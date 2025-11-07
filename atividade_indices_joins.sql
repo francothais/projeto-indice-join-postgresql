@@ -1,81 +1,47 @@
+--CRIAÇÃO DA TABELA PRINCIPAL - CONTRATOS
+
 DROP TABLE IF EXISTS contratos CASCADE;
 DROP TABLE IF EXISTS clientes CASCADE;
 
-CREATE TABLE clientes (
-    id_cliente SERIAL PRIMARY KEY,
-    nome_cliente VARCHAR(100) NOT NULL,
-    cidade VARCHAR(80),
-    estado CHAR(2)
-);
-
+--CRIAÇÃO DA TABELA PRINCIPAL - CONTRATOS
 CREATE TABLE contratos (
     id_contrato SERIAL PRIMARY KEY,
-    id_cliente INT NOT NULL,
-    numero_contrato VARCHAR(20) NOT NULL,
-    valor DECIMAL(10,2),
+    numero_contrato VARCHAR (30),
     data_contrato DATE,
-    status VARCHAR(20),
-    FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente)
+    valor NUMERIC(12,2),
+    id_cliente INT REFERENCES clientes(id_cliente),
 );
 
--- Inserindo 100 clientes
-INSERT INTO clientes (nome_cliente, cidade, estado)
-SELECT 
-    'Cliente ' || i,
-    'Cidade ' || (i % 10),
-    'SP'
-FROM generate_series(1, 100) AS s(i);
+-- CRIAÇÃO DA SEGUNDA TABELA - CLIENTES
+    CREATE TABLE clientes (
+    id_cliente SERIAL PRIMARY KEY,
+    nome_cliente VARCHAR(100) NOT NULL,
+    cidade VARCHAR(50)
+);
 
-INSERT INTO contratos (id_cliente, numero_contrato, valor, data_contrato, status)
-SELECT 
-    (random() * 99 + 1)::INT, -- cliente aleatório entre 1 e 100
-    'CTR-' || LPAD(i::TEXT, 5, '0'), -- número de contrato formatado
-    (random() * 9000 + 1000)::NUMERIC(10,2), -- valor entre 1000 e 10000
-    CURRENT_DATE - (i % 365), -- data nos últimos 12 meses
-    CASE 
-        WHEN random() < 0.7 THEN 'Ativo'
-        WHEN random() < 0.9 THEN 'Encerrado'
-        ELSE 'Pendente'
-    END
-FROM generate_series(1, 5000) AS s(i);
+-- IMPORTAÇÃO DOS DADOS VIA CSV
+COPY clientes (id_cliente, nome_cliente, cidade)
+FROM 'C:/Users/thais/Downloads/clientes.csv'
+WITH (FORMAT csv, HEADER, DELIMITER ',', ENCODING 'UTF8');
 
--- Buscar contratos de um cliente específico
-SELECT * FROM contratos WHERE id_cliente = 42;
+COPY contratos (numero_contrato, data_contrato, valor, id_cliente)
+FROM 'C:/Users/thais/Downloads/contratos.csv'
+WITH (FORMAT csv, HEADER, DELIMITER ',', ENCODING 'UTF8');
 
--- Buscar contratos com status 'Ativo'
-SELECT * FROM contratos WHERE status = 'Ativo';
+-- TESTE DE DESEMPENHO SEM ÍNDICE
+EXPLAIN ANALYZE
+SELECT * FROM contratos WHERE numero_contrato = 'CT-3500';
 
--- Buscar contratos com valor acima de 8000
-SELECT * FROM contratos WHERE valor > 8000;
+-- CRIAÇÃO DO ÍNDICE
+CREATE INDEX idx_contrato_numero ON contratos(numero_contrato);
 
--- Índice por cliente (melhora buscas por id_cliente)
-CREATE INDEX idx_contratos_cliente ON contratos(id_cliente);
+-- TESTE DE DESEMPENHO COM ÍNDICE
+EXPLAIN ANALYZE
+SELECT * FROM contratos WHERE numero_contrato = 'CT-3500';
 
--- Índice por status (melhora buscas por contratos ativos/inativos)
-CREATE INDEX idx_contratos_status ON contratos(status);
-
--- Índice composto (cliente + status)
-CREATE INDEX idx_contratos_cliente_status ON contratos(id_cliente, status);
-
--- Contratos de um cliente específico (usa idx_contratos_cliente)
-SELECT * FROM contratos WHERE id_cliente = 42;
-
--- Contratos ativos (usa idx_contratos_status)
-SELECT * FROM contratos WHERE status = 'Ativo';
-
--- Contratos ativos de um cliente (usa idx_contratos_cliente_status)
-SELECT * FROM contratos WHERE id_cliente = 42 AND status = 'Ativo';
-
--- JOIN simples entre contratos e clientes
-SELECT 
-    c.id_contrato,
-    c.numero_contrato,
-    c.valor,
-    c.status,
-    cl.nome_cliente,
-    cl.cidade
+-- JOIN ENTRE AS TABELAS
+EXPLAIN ANALYZE
+SELECT c.numero_contrato, c.valor, cl.nome_cliente, cl.cidade
 FROM contratos c
 JOIN clientes cl ON c.id_cliente = cl.id_cliente
-WHERE c.status = 'Ativo'
-ORDER BY c.valor DESC
-LIMIT 10;
+WHERE c.valor > 9000;
