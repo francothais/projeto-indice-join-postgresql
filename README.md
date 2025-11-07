@@ -1,6 +1,6 @@
 # Projeto indices e junção de tabelas no postgreSQL
 
-Este projeto foi desenvolvido para demonstrar o uso de índices em consultas SQL e o ganho de desempenho m um banco de dados com mais de 5000 registros.
+Este projeto foi desenvolvido para demonstrar o uso de índices em consultas SQL e o ganho de desempenho em um banco de dados com mais de 5,000 registros.
 
 ## Estrutura do projeto 
 - contratos.csv - contém 5000 registros de contratos
